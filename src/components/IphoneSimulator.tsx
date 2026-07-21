@@ -1081,89 +1081,6 @@ export default function IphoneSimulator({
             className="w-72 bg-slate-900 text-slate-100 flex flex-col h-full shrink-0 border-r border-slate-800/80 z-30"
           >
             
-            {/* Sidebar Header */}
-            <motion.div variants={sidebarChildVariants} className="p-4 border-b border-slate-850 flex items-center justify-between shrink-0">
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 rounded-md bg-[#FF6600] flex items-center justify-center text-white font-black text-xs">
-                  R+
-                </div>
-                <span className="font-extrabold text-xs text-white tracking-tight">歷史</span>
-              </div>
-              
-              {/* Collapse button on mobile/desktop */}
-              <button 
-                onClick={() => setShowSidebar(false)} 
-                className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
-                title="隱藏側邊欄"
-              >
-                <motion.div
-                  variants={svgVariants}
-                  className="flex items-center justify-center"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </motion.div>
-              </button>
-            </motion.div>
-
-            {/* New Chat Button */}
-            <motion.div variants={sidebarChildVariants} className="p-3 shrink-0">
-              <button 
-                onClick={handleCreateNewSession}
-                className="w-full py-2.5 px-3 bg-gradient-to-r from-[#FF6600] to-orange-500 hover:from-orange-600 hover:to-orange-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-[0.98] shadow-md shadow-[#FF6600]/10 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>新對話</span>
-              </button>
-            </motion.div>
-
-            {/* Search sessions */}
-            <motion.div variants={sidebarChildVariants} className="px-3 pb-2 shrink-0">
-              <div className="relative">
-                <input 
-                  type="text"
-                  placeholder="搜尋歷史會話..."
-                  value={sessionSearch}
-                  onChange={(e) => setSessionSearch(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700/60 rounded-xl pl-8 pr-3 py-1.5 text-[11px] font-bold text-slate-200 focus:outline-none focus:border-[#FF6600] placeholder:text-slate-500"
-                />
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
-                {sessionSearch && (
-                  <button 
-                    onClick={() => setSessionSearch("")}
-                    className="absolute right-2 top-2 text-slate-500 hover:text-white"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Sessions List */}
-            <motion.div variants={sidebarChildVariants} className="flex-1 overflow-y-auto px-2 py-1 space-y-1.5 scrollbar-thin">
-              {(() => {
-                const filtered = sessions.filter(s => 
-                  s.title.toLowerCase().includes(sessionSearch.toLowerCase()) ||
-                  (s.chaosInput && s.chaosInput.toLowerCase().includes(sessionSearch.toLowerCase()))
-                );
-                
-                if (filtered.length === 0) {
-                  return (
-                    <div className="text-center text-[10px] text-slate-500 py-8 font-medium">
-                      無相符對話紀錄
-                    </div>
-                  );
-                }
-
-                return filtered.map((s) => {
-                  const isActive = s.id === currentSessionId;
-                  const lastMsg = s.messages[s.messages.length - 1];
-                  const lastText = lastMsg ? lastMsg.text : "";
-
-                  return (
-                    <div 
-                      key={s.id}
-                      onClick={() => {
-                        setCurrentSessionId(s.id);
                         setReplyingTo(null);
                       }}
                       className={`group relative p-2.5 rounded-xl cursor-pointer transition flex flex-col text-left ${
@@ -1390,7 +1307,6 @@ export default function IphoneSimulator({
                         <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
                           <div className="flex items-center space-x-1.5 text-slate-900">
                             <Bot className="w-4 h-4 text-[#FF6600]" />
-                            <span className="font-extrabold text-[11px]">Rica+ AI 智能審計日誌</span>
                           </div>
                           <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${
                             m.auditResult.update_detected === 'TRUE' 
