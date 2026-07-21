@@ -1,0 +1,29 @@
+[
+  {
+    "platform": "Meta",
+    "last_updated": "2026-07-20",
+    "banned_keywords": [],
+    "link_in_caption_allowed": true,
+    "recommended_action": "review_before_publish",
+    "source_url": "https://www.facebook.com/policies/ads/",
+    "notes": "Auto-generated from the latest policy snapshot."
+  },
+  {
+    "platform": "Xiaohongshu",
+    "last_updated": "2026-07-20",
+    "banned_keywords": [],
+    "link_in_caption_allowed": true,
+    "recommended_action": "review_before_publish",
+    "source_url": "https://www.xiaohongshu.com/",
+    "notes": "Auto-generated from the latest policy snapshot."
+  },
+  {
+    "platform": "Douyin",
+    "last_updated": "2026-07-20",
+    "banned_keywords": [],
+    "link_in_caption_allowed": true,
+    "recommended_action": "review_before_publish",
+    "source_url": "https://www.douyin.com/",
+    "notes": "Auto-generated from the latest policy snapshot."
+  }
+]

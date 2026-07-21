@@ -1,11 +1,25 @@
-<div align="center">
+# Run and deploy your AI Studio app
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+This contains everything you need to run your app locally.
 
-  <h1>Built with AI Studio</h2>
+View your app in AI Studio: https://ai.studio/apps/6cebe9f7-dcb9-4e6e-b066-cb6197ac9c01
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## Run Locally
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+**Prerequisites:**  Node.js
 
-</div>
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
+
+## Research Prototype
+
+The repository also includes a separate Python prototype under `research/` for policy snapshot monitoring and `restriction_rules.json` generation.
+
+1. Install Python dependencies listed in `research/requirements.txt`.
+2. Run `python -m research.main run` to fetch snapshots and refresh the rule database.
+3. Run `python -m research.main shadowban --post-url <url> --platform <name>` to record a mock shadowban check.
+

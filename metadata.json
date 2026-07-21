@@ -1,0 +1,10 @@
+{
+  "name": "Remix: RICA+21",
+  "description": "RICA+21",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
