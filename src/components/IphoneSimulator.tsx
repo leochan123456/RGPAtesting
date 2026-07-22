@@ -61,6 +61,25 @@ interface MediaFile {
   url?: string;
 }
 
+interface AuditResult {
+  update_detected: string;
+  affected_platforms: string[];
+  dynamic_negative_prompts: {
+    scrub_keywords: string[];
+    hashtag_maximum_limit: number;
+    chao_ke_masking_enabled: boolean;
+  };
+  technical_payload_adjustments: {
+    caption_character_cap: number;
+    required_resolution_width: number;
+    required_resolution_height: number;
+  };
+  discord_alert_payload: {
+    severity: string;
+    summary_text: string;
+  };
+}
+
 interface ChatSession {
   id: string;
   title: string;
@@ -861,13 +880,63 @@ export default function IphoneSimulator({
 
     try {
       const results = computeCompliance();
+      const response = await fetch("/api/gemini/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: chaosInput })
+      });
+
+      let auditResultObj: AuditResult | null = null;
       let assistantMsgText = "";
+
+      if (response.ok) {
+        const responseData = await response.json();
+        try {
+          const parsed = JSON.parse(responseData.response);
+          auditResultObj = parsed;
+        } catch (e) {
+          console.error("Failed to parse response JSON: ", responseData.response);
+        }
+      } else {
+        console.warn("Backend API returned error or API key is not configured. Falling back to local auditor.");
+      }
+
+      if (!auditResultObj) {
+        // High-fidelity local auditor fallback structured according to user prompt rules
+        const inputLower = chaosInput.toLowerCase();
+        const affected: string[] = [];
+        if (inputLower.includes("meta") || inputLower.includes("instagram") || inputLower.includes("hashtag") || inputLower.includes("fb")) affected.push("Meta");
+        if (inputLower.includes("xiaohongshu") || inputLower.includes("小紅書") || inputLower.includes("vx") || inputLower.includes("wechat")) affected.push("Xiaohongshu");
+        if (inputLower.includes("douyin") || inputLower.includes("抖音") || inputLower.includes("回報")) affected.push("Douyin");
+        if (affected.length === 0) affected.push("Meta", "Xiaohongshu", "Douyin");
+
+        auditResultObj = {
+          update_detected: "TRUE",
+          affected_platforms: affected,
+          dynamic_negative_prompts: {
+            scrub_keywords: ["guaranteed return", "housing market boom", "wealth explosion", "VX", "WeChat ID", "微信"],
+            hashtag_maximum_limit: 5,
+            chao_ke_masking_enabled: true
+          },
+          technical_payload_adjustments: {
+            caption_character_cap: 1024,
+            required_resolution_width: 1920,
+            required_resolution_height: 1080
+          },
+          discord_alert_payload: {
+            severity: results.priceDeviationViolation ? "CRITICAL" : "INFO",
+            summary_text: `物業編號 ${parsedPropID} 放盤已完成 Rica+ 系統稽核。目前價格偏差率 ${results.priceDeviation}%，敏感詞已自動脫敏重寫。`
+          }
+        };
+      }
 
       if (results.priceDeviationViolation) {
         assistantMsgText = `❌ 【合規阻斷：叫價偏差突破 20% 限值】\n\n偵測到申報價 HK$ ${parsedPrice.toLocaleString()} 與真實成交均價 HK$ ${results.marketAvg.toLocaleString()} 偏差高達 ${results.priceDeviation}%！已觸發地監局防護防火牆。已鎖定複製與發布，請修改售價/租金。`;
       } else {
         assistantMsgText = `✅ 【EAA 100% 真盤源合規審核通過】\n\n- 市場估值均價：HK$ ${results.marketAvg.toLocaleString()}\n- 價格偏差比例：${results.priceDeviation}% (符合市場自由定價 ✅)\n- 已過濾敏感詞：${results.redirectFiltered ? '已自動重寫 WeChat/聯絡方式 ✅' : '未發現違規外鏈 ✅'}\n- EAA 代理牌照及委託協議：已自動委託放盤授權書儲存完畢 ✅\n\n文案已編譯。請在下方點擊平台標籤一鍵複製，或透過 Native Share-to 一鍵呼叫分享。`;
       }
+
+      const finalAssistantMsg = {
         id: loadingMsgId,
         sender: 'assistant',
         text: assistantMsgText,
@@ -892,7 +961,8 @@ export default function IphoneSimulator({
           line: results.line,
           youtube: results.youtube,
           douyin: results.douyin
-        }
+        },
+        auditResult: auditResultObj
       };
 
       handleSetMessages(prev => prev.map(m => m.id === loadingMsgId ? finalAssistantMsg : m));
@@ -1011,6 +1081,89 @@ export default function IphoneSimulator({
             className="w-72 bg-slate-900 text-slate-100 flex flex-col h-full shrink-0 border-r border-slate-800/80 z-30"
           >
             
+            {/* Sidebar Header */}
+            <motion.div variants={sidebarChildVariants} className="p-4 border-b border-slate-850 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 rounded-md bg-[#FF6600] flex items-center justify-center text-white font-black text-xs">
+                  R+
+                </div>
+                <span className="font-extrabold text-xs text-white tracking-tight">歷史</span>
+              </div>
+              
+              {/* Collapse button on mobile/desktop */}
+              <button 
+                onClick={() => setShowSidebar(false)} 
+                className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
+                title="隱藏側邊欄"
+              >
+                <motion.div
+                  variants={svgVariants}
+                  className="flex items-center justify-center"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </motion.div>
+              </button>
+            </motion.div>
+
+            {/* New Chat Button */}
+            <motion.div variants={sidebarChildVariants} className="p-3 shrink-0">
+              <button 
+                onClick={handleCreateNewSession}
+                className="w-full py-2.5 px-3 bg-gradient-to-r from-[#FF6600] to-orange-500 hover:from-orange-600 hover:to-orange-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-[0.98] shadow-md shadow-[#FF6600]/10 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>新對話</span>
+              </button>
+            </motion.div>
+
+            {/* Search sessions */}
+            <motion.div variants={sidebarChildVariants} className="px-3 pb-2 shrink-0">
+              <div className="relative">
+                <input 
+                  type="text"
+                  placeholder="搜尋歷史會話..."
+                  value={sessionSearch}
+                  onChange={(e) => setSessionSearch(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700/60 rounded-xl pl-8 pr-3 py-1.5 text-[11px] font-bold text-slate-200 focus:outline-none focus:border-[#FF6600] placeholder:text-slate-500"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
+                {sessionSearch && (
+                  <button 
+                    onClick={() => setSessionSearch("")}
+                    className="absolute right-2 top-2 text-slate-500 hover:text-white"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </motion.div>
+
+            {/* Sessions List */}
+            <motion.div variants={sidebarChildVariants} className="flex-1 overflow-y-auto px-2 py-1 space-y-1.5 scrollbar-thin">
+              {(() => {
+                const filtered = sessions.filter(s => 
+                  s.title.toLowerCase().includes(sessionSearch.toLowerCase()) ||
+                  (s.chaosInput && s.chaosInput.toLowerCase().includes(sessionSearch.toLowerCase()))
+                );
+                
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center text-[10px] text-slate-500 py-8 font-medium">
+                      無相符對話紀錄
+                    </div>
+                  );
+                }
+
+                return filtered.map((s) => {
+                  const isActive = s.id === currentSessionId;
+                  const lastMsg = s.messages[s.messages.length - 1];
+                  const lastText = lastMsg ? lastMsg.text : "";
+
+                  return (
+                    <div 
+                      key={s.id}
+                      onClick={() => {
+                        setCurrentSessionId(s.id);
                         setReplyingTo(null);
                       }}
                       className={`group relative p-2.5 rounded-xl cursor-pointer transition flex flex-col text-left ${
@@ -1081,7 +1234,7 @@ export default function IphoneSimulator({
               </div>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 hidden">
             {/* UTM Link Generator Panel Trigger */}
             <button
               onClick={() => {
@@ -1089,7 +1242,7 @@ export default function IphoneSimulator({
                 setShowPolicyPanel(false);
                 setShowTgConfig(false);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
+              className={`hidden items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
                 showUtmPanel 
                   ? 'bg-[#FF6600] text-white shadow-sm' 
                   : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-[#FF6600]'
@@ -1110,7 +1263,7 @@ export default function IphoneSimulator({
                 setShowUtmPanel(false);
                 setShowTgConfig(false);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
+              className={`hidden items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
                 showPolicyPanel 
                   ? 'bg-slate-800 text-white shadow-sm' 
                   : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
@@ -1128,7 +1281,7 @@ export default function IphoneSimulator({
                 setShowUtmPanel(false);
                 setShowPolicyPanel(false);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
+              className={`hidden items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
                 showTgConfig 
                   ? 'bg-sky-500 text-white shadow-sm' 
                   : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-sky-50 hover:text-sky-600'
@@ -1231,7 +1384,89 @@ export default function IphoneSimulator({
                   <>
                     <div className="whitespace-pre-wrap font-medium">{m.text}</div>
 
-                    {/* Audit demo reply removed: keep the message bubble text only */}
+                    {/* Highly Visual AI Audit Log Block */}
+                    {m.auditResult && (
+                      <div className="mt-3.5 p-3 bg-slate-50 border border-slate-200/60 rounded-xl space-y-3 text-slate-800 animate-fade-in text-left">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                          <div className="flex items-center space-x-1.5 text-slate-900">
+                            <Bot className="w-4 h-4 text-[#FF6600]" />
+                            <span className="font-extrabold text-[11px]">Rica+ AI 智能審計日誌</span>
+                          </div>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${
+                            m.auditResult.update_detected === 'TRUE' 
+                              ? 'bg-rose-100 text-rose-700' 
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {m.auditResult.update_detected === 'TRUE' ? '偵測到平台更新 ⚠️' : '合規安全 ✅'}
+                          </span>
+                        </div>
+
+                        {/* Discord Webhook payload simulation */}
+                        <div className="bg-slate-950 text-slate-100 rounded-lg p-2.5 space-y-1 text-[10px] font-mono leading-relaxed">
+                          <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-1 mb-1 font-bold text-[9px]">
+                            <span>🔔 DISCORD 警報通聯 API</span>
+                            <span className={m.auditResult.discord_alert_payload.severity === 'CRITICAL' ? 'text-rose-400 font-extrabold animate-pulse' : 'text-emerald-400 font-extrabold'}>
+                              ● {m.auditResult.discord_alert_payload.severity}
+                            </span>
+                          </div>
+                          <p className="text-emerald-400">{m.auditResult.discord_alert_payload.summary_text}</p>
+                        </div>
+
+                        {/* Scope and adjustments */}
+                        <div className="grid grid-cols-2 gap-2 text-[10px] leading-normal font-bold">
+                          <div className="bg-white border border-slate-200/50 p-2 rounded-lg space-y-1">
+                            <span className="text-slate-400 text-[8px] block uppercase tracking-wider font-extrabold">波及範圍 Platforms</span>
+                            <div className="flex flex-wrap gap-1">
+                              {m.auditResult.affected_platforms.map((p: string, i: number) => (
+                                <span key={i} className="bg-slate-100 text-slate-700 text-[8px] px-1.5 py-0.5 rounded border border-slate-200">
+                                  {p}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="bg-white border border-slate-200/50 p-2 rounded-lg space-y-1">
+                            <span className="text-slate-400 text-[8px] block uppercase tracking-wider font-extrabold">限值規約 Bounds</span>
+                            <div className="text-[9px] text-slate-600 font-semibold leading-normal">
+                              標籤上限：<strong>{m.auditResult.dynamic_negative_prompts.hashtag_maximum_limit} 個</strong><br />
+                              字數上限：<strong>{m.auditResult.technical_payload_adjustments.caption_character_cap} 字</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Prohibited words list */}
+                        {m.auditResult.dynamic_negative_prompts.scrub_keywords.length > 0 && (
+                          <div className="bg-white border border-slate-200/50 p-2 rounded-lg text-left text-[10px]">
+                            <span className="text-slate-400 text-[8px] font-extrabold block uppercase tracking-wider mb-1">合規脫敏屏蔽詞 (Scrubbed Keywords)</span>
+                            <div className="flex flex-wrap gap-1">
+                              {m.auditResult.dynamic_negative_prompts.scrub_keywords.map((word: string, i: number) => (
+                                <span key={i} className="bg-rose-50 text-rose-600 text-[8px] px-1.5 py-0.5 rounded border border-rose-100 font-mono font-bold">
+                                  🚫 {word}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Copy raw button */}
+                        <div className="pt-1 text-right">
+                          <button 
+                            onClick={() => {
+                              const jsonText = JSON.stringify(m.auditResult, null, 2);
+                              const tempTextarea = document.createElement('textarea');
+                              tempTextarea.value = jsonText;
+                              document.body.appendChild(tempTextarea);
+                              tempTextarea.select();
+                              document.execCommand('copy');
+                              document.body.removeChild(tempTextarea);
+                              triggerGlobalNotification("審計 JSON 已複製", "合規 JSON 數據 payload 已成功複製到您的剪貼簿！", "clipboard", "success");
+                            }}
+                            className="text-[9px] text-slate-500 hover:text-[#FF6600] font-black border border-slate-200 hover:bg-slate-100/50 px-2.5 py-1 rounded-lg transition inline-flex items-center gap-1 cursor-pointer bg-white"
+                          >
+                            <Clipboard className="w-2.5 h-2.5" /> 複製 AI 審計 JSON
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
