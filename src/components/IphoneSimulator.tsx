@@ -64,6 +64,7 @@ interface MediaFile {
 interface AuditResult {
   update_detected: string;
   affected_platforms: string[];
+  ai_chat_response?: string;
   dynamic_negative_prompts: {
     scrub_keywords: string[];
     hashtag_maximum_limit: number;
@@ -936,6 +937,10 @@ export default function IphoneSimulator({
         assistantMsgText = `✅ 【EAA 100% 真盤源合規審核通過】\n\n- 市場估值均價：HK$ ${results.marketAvg.toLocaleString()}\n- 價格偏差比例：${results.priceDeviation}% (符合市場自由定價 ✅)\n- 已過濾敏感詞：${results.redirectFiltered ? '已自動重寫 WeChat/聯絡方式 ✅' : '未發現違規外鏈 ✅'}\n- EAA 代理牌照及委託協議：已自動委託放盤授權書儲存完畢 ✅\n\n文案已編譯。請在下方點擊平台標籤一鍵複製，或透過 Native Share-to 一鍵呼叫分享。`;
       }
 
+      if (auditResultObj?.ai_chat_response) {
+        assistantMsgText = `🤖 【Rica+ AI Copilot 回覆】\n${auditResultObj.ai_chat_response}\n\n` + assistantMsgText;
+      }
+
       const finalAssistantMsg = {
         id: loadingMsgId,
         sender: 'assistant',
@@ -1384,89 +1389,7 @@ export default function IphoneSimulator({
                   <>
                     <div className="whitespace-pre-wrap font-medium">{m.text}</div>
 
-                    {/* Highly Visual AI Audit Log Block */}
-                    {m.auditResult && (
-                      <div className="mt-3.5 p-3 bg-slate-50 border border-slate-200/60 rounded-xl space-y-3 text-slate-800 animate-fade-in text-left">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                          <div className="flex items-center space-x-1.5 text-slate-900">
-                            <Bot className="w-4 h-4 text-[#FF6600]" />
-                            <span className="font-extrabold text-[11px]">Rica+ AI 智能審計日誌</span>
-                          </div>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${
-                            m.auditResult.update_detected === 'TRUE' 
-                              ? 'bg-rose-100 text-rose-700' 
-                              : 'bg-emerald-100 text-emerald-700'
-                          }`}>
-                            {m.auditResult.update_detected === 'TRUE' ? '偵測到平台更新 ⚠️' : '合規安全 ✅'}
-                          </span>
-                        </div>
-
-                        {/* Discord Webhook payload simulation */}
-                        <div className="bg-slate-950 text-slate-100 rounded-lg p-2.5 space-y-1 text-[10px] font-mono leading-relaxed">
-                          <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-1 mb-1 font-bold text-[9px]">
-                            <span>🔔 DISCORD 警報通聯 API</span>
-                            <span className={m.auditResult.discord_alert_payload.severity === 'CRITICAL' ? 'text-rose-400 font-extrabold animate-pulse' : 'text-emerald-400 font-extrabold'}>
-                              ● {m.auditResult.discord_alert_payload.severity}
-                            </span>
-                          </div>
-                          <p className="text-emerald-400">{m.auditResult.discord_alert_payload.summary_text}</p>
-                        </div>
-
-                        {/* Scope and adjustments */}
-                        <div className="grid grid-cols-2 gap-2 text-[10px] leading-normal font-bold">
-                          <div className="bg-white border border-slate-200/50 p-2 rounded-lg space-y-1">
-                            <span className="text-slate-400 text-[8px] block uppercase tracking-wider font-extrabold">波及範圍 Platforms</span>
-                            <div className="flex flex-wrap gap-1">
-                              {m.auditResult.affected_platforms.map((p: string, i: number) => (
-                                <span key={i} className="bg-slate-100 text-slate-700 text-[8px] px-1.5 py-0.5 rounded border border-slate-200">
-                                  {p}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="bg-white border border-slate-200/50 p-2 rounded-lg space-y-1">
-                            <span className="text-slate-400 text-[8px] block uppercase tracking-wider font-extrabold">限值規約 Bounds</span>
-                            <div className="text-[9px] text-slate-600 font-semibold leading-normal">
-                              標籤上限：<strong>{m.auditResult.dynamic_negative_prompts.hashtag_maximum_limit} 個</strong><br />
-                              字數上限：<strong>{m.auditResult.technical_payload_adjustments.caption_character_cap} 字</strong>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Prohibited words list */}
-                        {m.auditResult.dynamic_negative_prompts.scrub_keywords.length > 0 && (
-                          <div className="bg-white border border-slate-200/50 p-2 rounded-lg text-left text-[10px]">
-                            <span className="text-slate-400 text-[8px] font-extrabold block uppercase tracking-wider mb-1">合規脫敏屏蔽詞 (Scrubbed Keywords)</span>
-                            <div className="flex flex-wrap gap-1">
-                              {m.auditResult.dynamic_negative_prompts.scrub_keywords.map((word: string, i: number) => (
-                                <span key={i} className="bg-rose-50 text-rose-600 text-[8px] px-1.5 py-0.5 rounded border border-rose-100 font-mono font-bold">
-                                  🚫 {word}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Copy raw button */}
-                        <div className="pt-1 text-right">
-                          <button 
-                            onClick={() => {
-                              const jsonText = JSON.stringify(m.auditResult, null, 2);
-                              const tempTextarea = document.createElement('textarea');
-                              tempTextarea.value = jsonText;
-                              document.body.appendChild(tempTextarea);
-                              tempTextarea.select();
-                              document.execCommand('copy');
-                              document.body.removeChild(tempTextarea);
-                              triggerGlobalNotification("審計 JSON 已複製", "合規 JSON 數據 payload 已成功複製到您的剪貼簿！", "clipboard", "success");
-                            }}
-                            className="text-[9px] text-slate-500 hover:text-[#FF6600] font-black border border-slate-200 hover:bg-slate-100/50 px-2.5 py-1 rounded-lg transition inline-flex items-center gap-1 cursor-pointer bg-white"
-                          >
-                            <Clipboard className="w-2.5 h-2.5" /> 複製 AI 審計 JSON
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    {/* Highly Visual AI Audit Log Block removed as per user request */}
                   </>
                 )}
 
@@ -1834,13 +1757,16 @@ export default function IphoneSimulator({
             </button>
 
             {/* Main Chat message input area */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative flex items-center">
+              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#FF6600] pointer-events-none flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+              </div>
               <input 
                 type="text"
                 value={chaosInput}
                 onChange={(e) => handleSetChaosInput(e.target.value)}
-                placeholder="請直接輸入或用語音錄入原始房源詳情"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-10 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#FF6600] placeholder:text-slate-400"
+                placeholder="與 Rica+ AI Copilot 智能助手對話、詢問合規條例或輸入房源..."
+                className="w-full bg-slate-50 border border-orange-200/90 rounded-xl pl-8 pr-10 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#FF6600] focus:ring-2 focus:ring-[#FF6600]/20 placeholder:text-slate-400 transition shadow-sm"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleSendListing();
@@ -1848,10 +1774,11 @@ export default function IphoneSimulator({
                 }}
               />
               
-              <div className="absolute right-1.5 top-1.5">
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
                 <button 
                   onClick={handleSendListing}
-                  className="p-1.5 bg-[#FF6600] text-white rounded-md hover:bg-[#e05300] transition active:scale-95 cursor-pointer"
+                  className="p-1.5 bg-[#FF6600] text-white rounded-lg hover:bg-[#e05300] transition active:scale-95 cursor-pointer shadow-sm flex items-center justify-center"
+                  title="發送給 Rica+ AI 智能助手"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
