@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { TRUE_PRICE_DATABASE, PRESET_SCENARIOS } from '../presets';
 import { generateUtmUrl, appendUtmToCopy } from '../utils/utmEngine';
+import { handleShareCommand, type ShareDeepLink } from '../agent';
+import { renderPosterBlob, sharePosterWithFallback } from '../utils/posterCanvas';
 import { UTMSource, UTMMedium } from '../types';
 
 const SIMULATED_VOICE_TRANSCRIPTS = [
@@ -941,6 +943,24 @@ export default function IphoneSimulator({
         assistantMsgText = `🤖 【Rica+ AI Copilot 回覆】\n${auditResultObj.ai_chat_response}\n\n` + assistantMsgText;
       }
 
+      // ── Phase 2: Share Intent Detection ──
+      let shareIntent: ShareDeepLink | null = null;
+      const utmAgentId = localStorage.getItem('rica_utm_agent_id') || 'C-001702-A101';
+      const utmContentId = 'post-' + new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const shareResult = handleShareCommand(
+        chaosInput,
+        results.whatsapp,  // primary copy for deep-linking
+        {
+          id: parsedPropID || 'AH2023101',
+          campaign: utmAgentId,
+          content: utmContentId,
+        },
+      );
+      if (shareResult) {
+        shareIntent = shareResult.deepLink;
+        assistantMsgText = `🚀 *智能分享指令已識別！*\n\n偵測到您想將文案分享至 *${shareResult.intent.platformLabel}*。\n下方已為您產生一鍵直達連結，點擊即可開啟 ${shareResult.intent.platformLabel} 並自動填入合規文案。\n\n---\n${assistantMsgText}`;
+      }
+
       const finalAssistantMsg = {
         id: loadingMsgId,
         sender: 'assistant',
@@ -967,7 +987,8 @@ export default function IphoneSimulator({
           youtube: results.youtube,
           douyin: results.douyin
         },
-        auditResult: auditResultObj
+        auditResult: auditResultObj,
+        shareIntent: shareIntent || undefined,
       };
 
       handleSetMessages(prev => prev.map(m => m.id === loadingMsgId ? finalAssistantMsg : m));
@@ -1066,6 +1087,100 @@ export default function IphoneSimulator({
       );
     } finally {
       setIsSendingTelegram(false);
+    }
+  };
+
+  // ── Phase 5: Poster Canvas Generation & Native Share ──
+  const [isGeneratingPoster, setIsGeneratingPoster] = useState<boolean>(false);
+
+  const handlePosterShare = async () => {
+    setIsGeneratingPoster(true);
+    triggerGlobalNotification(
+      "正在生成海報...",
+      "Rica+ 正在合成 4 層遊戲風格宣傳海報並準備原生分享...",
+      "image",
+      "info",
+    );
+
+    try {
+      const propId = parsedPropID && parsedPropID.trim().length > 0
+        ? parsedPropID
+        : "AH2023101";
+
+      const utmSource: UTMSource = 'whatsapp';
+      const utmMediumVal: UTMMedium = utmMedium;
+      const utmCampaign = utmAgentId;
+      const utmContent = utmPostId;
+
+      const firstPhoto = uploadedFiles.find(f => f.type === 'photo');
+      const posterBlob = await renderPosterBlob({
+        photoUrl: firstPhoto?.url,
+        priceText: compliance.whatsapp.split('\n')[0] || `意向價：HK$ ${parsedPrice.toLocaleString()}`,
+        areaText: parsedArea > 0
+          ? `實用面積：約 ${parsedArea} 平方呎`
+          : '實用面積：請聯絡經紀查詢',
+        propertyId: propId,
+        landmark: parsedLandmark,
+        utm: {
+          id: propId,
+          source: utmSource,
+          medium: utmMediumVal,
+          campaign: utmCampaign,
+          content: utmContent,
+        },
+        captionText: compliance.whatsapp.split('\n').slice(0, 2).join(' ') || '',
+        publishDate: new Date().toISOString().split('T')[0],
+      });
+
+      const utmUrl = generateUtmUrl({
+        id: propId,
+        source: utmSource,
+        medium: utmMediumVal,
+        campaign: utmCampaign,
+        content: utmContent,
+      });
+
+      const result = await sharePosterWithFallback(
+        posterBlob,
+        compliance.whatsapp,
+        utmUrl,
+        `ricacorp-${propId}-poster.png`,
+      );
+
+      if (result.method === 'native') {
+        if (result.success) {
+          triggerGlobalNotification(
+            "海報分享成功 🎉",
+            "遊戲風格宣傳海報已通過原生分享機制發送！",
+            "check-circle",
+            "success",
+          );
+        } else {
+          triggerGlobalNotification(
+            "分享已取消",
+            "原生分享面板已關閉，海報未發送。",
+            "info",
+            "info",
+          );
+        }
+      } else {
+        triggerGlobalNotification(
+          "已下載海報 + 複製文案",
+          "原生分享不受支援，海報 PNG 已下載至您的裝置，文案亦已複製到剪貼簿！",
+          "check-circle",
+          "success",
+        );
+      }
+    } catch (err) {
+      console.error("Poster share failed:", err);
+      triggerGlobalNotification(
+        "海報生成失敗",
+        "無法合成宣傳海報，請檢查上傳的相片是否有效。",
+        "alert-triangle",
+        "error",
+      );
+    } finally {
+      setIsGeneratingPoster(false);
     }
   };
 
@@ -1388,6 +1503,37 @@ export default function IphoneSimulator({
                 ) : (
                   <>
                     <div className="whitespace-pre-wrap font-medium">{m.text}</div>
+
+                    {/* Phase 2: Smart Deep-Link Action Button */}
+                    {m.shareIntent && (
+                      <a
+                        href={m.shareIntent.actionUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF6600] to-orange-500 text-white text-xs font-extrabold shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 w-fit"
+                        onClick={(e) => {
+                          // Prevent interfering with chat scroll
+                          e.stopPropagation();
+                          triggerGlobalNotification(
+                            `正在開啟 ${m.shareIntent.label}`,
+                            `Rica+ 已自動填入合規文案至 ${m.shareIntent.label} 發布介面！`,
+                            'send',
+                            'success',
+                          );
+                        }}
+                      >
+                        {/* Platform-specific mini icon */}
+                        <span className="w-5 h-5 rounded-md bg-white/20 flex items-center justify-center text-[10px] font-black shrink-0">
+                          {m.shareIntent.icon === 'whatsapp' && 'WA'}
+                          {m.shareIntent.icon === 'facebook' && 'FB'}
+                          {m.shareIntent.icon === 'instagram' && 'IG'}
+                          {m.shareIntent.icon === 'linkedin' && 'LI'}
+                          {m.shareIntent.icon === 'xiaohongshu' && 'RED'}
+                        </span>
+                        <span>一鍵分享至 {m.shareIntent.label}</span>
+                        <Send className="w-3.5 h-3.5 ml-auto opacity-70" />
+                      </a>
+                    )}
 
                     {/* Highly Visual AI Audit Log Block removed as per user request */}
                   </>
@@ -2010,6 +2156,43 @@ export default function IphoneSimulator({
               {/* Secure mechanism explanation block */}
               <div className="bg-slate-50 rounded-xl p-2.5 text-[9px] text-slate-500 leading-normal border border-slate-100">
                 🛡️ <strong>Native Share-to 原生分發機制：</strong> 已自動依各平台演算法及 EAA 法規過濾敏感詞。本系統採用經紀個人端 Native Share-to 機制發布，不走集中 API 群發，避免引發 IP 及設備關聯封號。
+              </div>
+
+              {/* ── Phase 5: Game-Style Canvas Poster Share ── */}
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">🎨 遊戲風格海報分享</span>
+                  <span className="h-px flex-1 bg-slate-200"></span>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    setShowShareSheet(false);
+                    await handlePosterShare();
+                  }}
+                  disabled={isGeneratingPoster}
+                  className={`w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-extrabold text-xs transition-all duration-200 shadow-md ${
+                    isGeneratingPoster
+                      ? 'bg-slate-200 text-slate-400 cursor-wait'
+                      : 'bg-gradient-to-r from-[#FF6600] via-orange-500 to-amber-500 text-white hover:shadow-lg active:scale-[0.98] cursor-pointer'
+                  }`}
+                >
+                  {isGeneratingPoster ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                      <span>正在合成 4 層海報...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-5 h-5 rounded-md bg-white/20 flex items-center justify-center text-xs font-black">🎨</span>
+                      <span>一鍵生成遊戲風格海報 + 原生分享</span>
+                    </>
+                  )}
+                </button>
+
+                <p className="text-[8px] text-slate-400 text-center leading-relaxed">
+                  合成 4 層 Canvas 海報（相片 + 數據疊加 + 品牌合規 + QR Code）→ PNG Blob → 原生 Share Sheet / 自動下載
+                </p>
               </div>
 
               <button 

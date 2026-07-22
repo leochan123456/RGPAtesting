@@ -10,12 +10,13 @@ export interface PresetScenario {
   defaultPropertyID: string;
   copywriting: string;
   chaosInput: string;
+  /** @since Phase 2 — Maps to the 4 content scenarios */
+  scenario?: ContentScenario;
 }
 
 export interface ComplianceStatus {
   passed: boolean;
-  priceDeviation: number; // percentage
-  priceDeviationViolation: boolean; // if > 20%
+  priceDeviation: number; // percentage — informational only, no hard block
   redirectFiltered: boolean; // if WeChat/phone/WhatsApp numbers were replaced
   originalContactRemoved: string[]; // names of filtered words
   legalPreambleAdded: boolean;
@@ -39,6 +40,16 @@ export interface QuizQuestion {
 
 export type UTMSource = 'facebook' | 'instagram' | 'whatsapp' | 'linkedin' | 'xiaohongshu';
 export type UTMMedium = 'achievement' | 'property_listing' | 'finance_news' | 'hk_macro_policy';
+
+/**
+ * ContentScenario defines the 4 distinct content types the AI agent can generate.
+ * These map to real-world use cases for a PropTech agent assistant.
+ */
+export type ContentScenario =
+  | 'LINKEDIN_ACHIEVEMENT'  // Professional achievements, deals closed, personal branding
+  | 'PROPERTY_LISTING'      // Property highlights, yields, transit, and school nets
+  | 'FINANCE_NEWS'          // HK interest rate moves, Fed policy, mortgage caps, market trends
+  | 'HK_POLICY';            // Top Talent Pass Scheme (高才通), stamp duty shifts, macro news
 
 export interface UTMParams {
   id: string; // Property ID
